@@ -185,10 +185,18 @@ func (s *ProxyService) InitRoutes(e *gin.Engine) {
 	e.GET("/_ping", s.pong)
 	e.GET("/models", s.models)
 	e.GET("/v1/models", s.models)
-	authToken := s.cfg.AuthToken // replace with your dynamic value as needed
-	if authToken != "" {
-		// 鉴权
-		v1 := e.Group("/:token/v1/", AuthMiddleware(authToken))
+    // 创建一个新的中间件，它使用 URL 中的 :token 参数
+    tokenAuthMiddleware := func(c *gin.Context) {
+        token := c.Param("token")
+        if token == "" {
+            c.JSON(http.StatusUnauthorized, gin.H{"error": "No token provided"})
+            c.Abort()
+            return
+        }
+        // 这里可以添加额外的token验证逻辑，如果需要的话
+        c.Next()
+    }
+	v1 := e.Group("/:token/v1/", tokenAuthMiddleware)
 		{
 			v1.POST("/chat/completions", s.completions)
 			v1.POST("/engines/copilot-codex/completions", s.codeCompletions)
@@ -196,13 +204,6 @@ func (s *ProxyService) InitRoutes(e *gin.Engine) {
 			v1.POST("/v1/chat/completions", s.completions)
 			v1.POST("/v1/engines/copilot-codex/completions", s.codeCompletions)
 		}
-	} else {
-		e.POST("/v1/chat/completions", s.completions)
-		e.POST("/v1/engines/copilot-codex/completions", s.codeCompletions)
-
-		e.POST("/v1/v1/chat/completions", s.completions)
-		e.POST("/v1/v1/engines/copilot-codex/completions", s.codeCompletions)
-	}
 }
 
 type Pong struct {
@@ -369,9 +370,10 @@ func (s *ProxyService) completions(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-
+	
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+s.cfg.ChatApiKey)
+
 	if "" != s.cfg.ChatApiOrganization {
 		req.Header.Set("OpenAI-Organization", s.cfg.ChatApiOrganization)
 	}
@@ -432,9 +434,9 @@ func (s *ProxyService) codeCompletions(c *gin.Context) {
 		abortCodex(c, http.StatusInternalServerError)
 		return
 	}
-
+	token := c.Param("token")
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.cfg.CodexApiKey)
+	req.Header.Set("Authorization", "Bearer "+token)
 	if "" != s.cfg.CodexApiOrganization {
 		req.Header.Set("OpenAI-Organization", s.cfg.CodexApiOrganization)
 	}
