@@ -19,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"math/rand"
 )
 
 const DefaultInstructModel = "gpt-3.5-turbo-instruct"
@@ -411,8 +410,6 @@ func (s *ProxyService) completions(c *gin.Context) {
 }
 
 func (s *ProxyService) codeCompletions(c *gin.Context) {
-	// 在函数开始时初始化随机数生成器
-	rand.Seed(time.Now().UnixNano())
 	ctx := c.Request.Context()
 
 	time.Sleep(200 * time.Millisecond)
@@ -437,18 +434,7 @@ func (s *ProxyService) codeCompletions(c *gin.Context) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	apiKeys := strings.Split(s.cfg.CodexApiKey, ",")
-	if len(apiKeys) > 0 {
-		randomIndex := rand.Intn(len(apiKeys))
-		selectedApiKey := strings.TrimSpace(apiKeys[randomIndex])
-		req.Header.Set("Authorization", "Bearer "+selectedApiKey)
-		log.Println("request completions failed:", string(selectedApiKey))
-	} else {
-		// 如果没有有效的 API key，可以在这里处理错误
-		log.Println("No valid API key found")
-		abortCodex(c, http.StatusInternalServerError)
-		return
-	}
+	req.Header.Set("Authorization", "Bearer "+s.cfg.CodexApiKey)
 	if "" != s.cfg.CodexApiOrganization {
 		req.Header.Set("OpenAI-Organization", s.cfg.CodexApiOrganization)
 	}
