@@ -169,40 +169,52 @@ func NewProxyService(cfg *config) (*ProxyService, error) {
 		client: client,
 	}, nil
 }
-func AuthMiddleware(authToken string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		token := c.Param("token")
-		if token != authToken {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-			c.Abort()
-			return
-		}
-		c.Next()
-	}
+
+func AuthMiddleware(authTokens []string) gin.HandlerFunc {
+    return func(c *gin.Context) {
+        token := c.Param("token")
+        authorized := false
+        for _, authToken := range authTokens {
+            if token == authToken {
+                authorized = true
+                break
+            }
+        }
+        if !authorized {
+            c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+            c.Abort()
+            return
+        }
+        c.Next()
+    }
 }
 
 func (s *ProxyService) InitRoutes(e *gin.Engine) {
 	e.GET("/_ping", s.pong)
 	e.GET("/models", s.models)
 	e.GET("/v1/models", s.models)
-	authToken := s.cfg.AuthToken // replace with your dynamic value as needed
-	if authToken != "" {
-		// 鉴权
-		v1 := e.Group("/:token/v1/", AuthMiddleware(authToken))
-		{
-			v1.POST("/chat/completions", s.completions)
-			v1.POST("/engines/copilot-codex/completions", s.codeCompletions)
+        authTokens := strings.Split(s.cfg.AuthToken, ",")
+        for i := range authTokens {
+            authTokens[i] = strings.TrimSpace(authTokens[i])
+        }
 
-			v1.POST("/v1/chat/completions", s.completions)
-			v1.POST("/v1/engines/copilot-codex/completions", s.codeCompletions)
-		}
-	} else {
-		e.POST("/v1/chat/completions", s.completions)
-		e.POST("/v1/engines/copilot-codex/completions", s.codeCompletions)
+        if len(authTokens) > 0 && authTokens[0] != "" {
+            // 鉴权
+            v1 := e.Group("/:token/v1/", AuthMiddleware(authTokens))
+            {
+                v1.POST("/chat/completions", s.completions)
+                v1.POST("/engines/copilot-codex/completions", s.codeCompletions)
 
-		e.POST("/v1/v1/chat/completions", s.completions)
-		e.POST("/v1/v1/engines/copilot-codex/completions", s.codeCompletions)
-	}
+                v1.POST("/v1/chat/completions", s.completions)
+                v1.POST("/v1/engines/copilot-codex/completions", s.codeCompletions)
+            }
+        } else {
+            e.POST("/v1/chat/completions", s.completions)
+            e.POST("/v1/engines/copilot-codex/completions", s.codeCompletions)
+
+            e.POST("/v1/v1/chat/completions", s.completions)
+            e.POST("/v1/v1/engines/copilot-codex/completions", s.codeCompletions)
+        }
 }
 
 type Pong struct {
