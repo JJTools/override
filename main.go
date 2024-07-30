@@ -18,8 +18,8 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"math/rand"
 	"time"
+	"math/rand"
 )
 
 const DefaultInstructModel = "gpt-3.5-turbo-instruct"
@@ -157,42 +157,19 @@ func closeIO(c io.Closer) {
 type ProxyService struct {
 	cfg    *config
 	client *http.Client
-	codexApiKeys []string
 }
 
 func NewProxyService(cfg *config) (*ProxyService, error) {
-    client, err := getClient(cfg)
-    if nil != err {
-        return nil, err
-    }
+	client, err := getClient(cfg)
+	if nil != err {
+		return nil, err
+	}
 
-    // 拆分 CodexApiKey
-    codexApiKeys := strings.Split(cfg.CodexApiKey, ",")
-    for i, key := range codexApiKeys {
-        codexApiKeys[i] = strings.TrimSpace(key)
-    }
-
-    return &ProxyService{
-        cfg:         cfg,
-        client:      client,
-        codexApiKeys: codexApiKeys,
-    }, nil
+	return &ProxyService{
+		cfg:    cfg,
+		client: client,
+	}, nil
 }
-
-func (s *ProxyService) getRandomCodexApiKey() string {
-    if len(s.codexApiKeys) == 0 {
-        return ""
-    }
-    fullKey := s.codexApiKeys[rand.Intn(len(s.codexApiKeys))]
-    // 假设密钥格式为 "sk-xxxxxxxx"，我们只需要 "xxxxxxxx" 部分
-    parts := strings.SplitN(fullKey, "-", 2)
-    if len(parts) != 2 {
-        log.Println("Warning: Invalid API key format")
-        return fullKey // 返回完整的键，以防格式不正确
-    }
-    return parts[1] // 返回 "-" 后面的部分
-}
-
 func AuthMiddleware(authToken string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := c.Param("token")
@@ -434,37 +411,49 @@ func (s *ProxyService) completions(c *gin.Context) {
 }
 
 func (s *ProxyService) codeCompletions(c *gin.Context) {
-    ctx := c.Request.Context()
+	// 在函数开始时初始化随机数生成器
+	rand.Seed(time.Now().UnixNano())
+	ctx := c.Request.Context()
 
-    time.Sleep(200 * time.Millisecond)
-    if ctx.Err() != nil {
-        abortCodex(c, http.StatusRequestTimeout)
-        return
-    }
+	time.Sleep(200 * time.Millisecond)
+	if ctx.Err() != nil {
+		abortCodex(c, http.StatusRequestTimeout)
+		return
+	}
 
-    body, err := io.ReadAll(c.Request.Body)
-    if nil != err {
-        abortCodex(c, http.StatusBadRequest)
-        return
-    }
+	body, err := io.ReadAll(c.Request.Body)
+	if nil != err {
+		abortCodex(c, http.StatusBadRequest)
+		return
+	}
 
-    body = ConstructRequestBody(body, s.cfg)
+	body = ConstructRequestBody(body, s.cfg)
 
-    proxyUrl := s.cfg.CodexApiBase + "/completions"
-    req, err := http.NewRequestWithContext(ctx, http.MethodPost, proxyUrl, io.NopCloser(bytes.NewBuffer(body)))
-    if nil != err {
-        abortCodex(c, http.StatusInternalServerError)
-        return
-    }
+	proxyUrl := s.cfg.CodexApiBase + "/completions"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, proxyUrl, io.NopCloser(bytes.NewBuffer(body)))
+	if nil != err {
+		abortCodex(c, http.StatusInternalServerError)
+		return
+	}
 
-    req.Header.Set("Content-Type", "application/json")
-    req.Header.Set("Authorization", "Bearer sk-"+s.getRandomCodexApiKey())
-    if "" != s.cfg.CodexApiOrganization {
-        req.Header.Set("OpenAI-Organization", s.cfg.CodexApiOrganization)
-    }
-    if "" != s.cfg.CodexApiProject {
-        req.Header.Set("OpenAI-Project", s.cfg.CodexApiProject)
-    }
+	req.Header.Set("Content-Type", "application/json")
+	apiKeys := strings.Split(s.cfg.CodexApiKey, ",")
+	if len(apiKeys) > 0 {
+		randomIndex := rand.Intn(len(apiKeys))
+		selectedApiKey := strings.TrimSpace(apiKeys[randomIndex])
+		req.Header.Set("Authorization", "Bearer "+selectedApiKey)
+	} else {
+		// 如果没有有效的 API key，可以在这里处理错误
+		log.Println("No valid API key found")
+		abortCodex(c, http.StatusInternalServerError)
+		return
+	}
+	if "" != s.cfg.CodexApiOrganization {
+		req.Header.Set("OpenAI-Organization", s.cfg.CodexApiOrganization)
+	}
+	if "" != s.cfg.CodexApiProject {
+		req.Header.Set("OpenAI-Project", s.cfg.CodexApiProject)
+	}
 
 	resp, err := s.client.Do(req)
 	if nil != err {
@@ -550,25 +539,23 @@ func constructWithChatModel(body []byte, messages interface{}) []byte {
 }
 
 func main() {
-    // 初始化随机数生成器
-    rand.Seed(time.Now().UnixNano())
+	cfg := readConfig()
 
-    cfg := readConfig()
+	gin.SetMode(gin.ReleaseMode)
+	r := gin.Default()
 
-    gin.SetMode(gin.ReleaseMode)
-    r := gin.Default()
+	proxyService, err := NewProxyService(cfg)
+	if nil != err {
+		log.Fatal(err)
+		return
+	}
 
-    proxyService, err := NewProxyService(cfg)
-    if nil != err {
-        log.Fatal(err)
-        return
-    }
+	proxyService.InitRoutes(r)
 
-    proxyService.InitRoutes(r)
+	err = r.Run(cfg.Bind)
+	if nil != err {
+		log.Fatal(err)
+		return
+	}
 
-    err = r.Run(cfg.Bind)
-    if nil != err {
-        log.Fatal(err)
-        return
-    }
 }
