@@ -156,65 +156,69 @@ func closeIO(c io.Closer) {
 type ProxyService struct {
 	cfg    *config
 	client *http.Client
+	codexApiKeys []string
 }
 
 func NewProxyService(cfg *config) (*ProxyService, error) {
-	client, err := getClient(cfg)
-	if nil != err {
-		return nil, err
-	}
+    client, err := getClient(cfg)
+    if nil != err {
+        return nil, err
+    }
 
-	return &ProxyService{
-		cfg:    cfg,
-		client: client,
-	}, nil
+    // 拆分 CodexApiKey
+    codexApiKeys := strings.Split(cfg.CodexApiKey, ",")
+    for i, key := range codexApiKeys {
+        codexApiKeys[i] = strings.TrimSpace(key)
+    }
+
+    return &ProxyService{
+        cfg:         cfg,
+        client:      client,
+        codexApiKeys: codexApiKeys,
+    }, nil
 }
 
-func AuthMiddleware(authTokens []string) gin.HandlerFunc {
-    return func(c *gin.Context) {
-        token := c.Param("token")
-        authorized := false
-        for _, authToken := range authTokens {
-            if token == authToken {
-                authorized = true
-                break
-            }
-        }
-        if !authorized {
-            c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
-            c.Abort()
-            return
-        }
-        c.Next()
+func (s *ProxyService) getRandomCodexApiKey() string {
+    if len(s.codexApiKeys) == 0 {
+        return ""
     }
+    return s.codexApiKeys[rand.Intn(len(s.codexApiKeys))]
+}
+
+func AuthMiddleware(authToken string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := c.Param("token")
+		if token != authToken {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
 }
 
 func (s *ProxyService) InitRoutes(e *gin.Engine) {
 	e.GET("/_ping", s.pong)
 	e.GET("/models", s.models)
 	e.GET("/v1/models", s.models)
-        authTokens := strings.Split(s.cfg.AuthToken, ",")
-        for i := range authTokens {
-            authTokens[i] = strings.TrimSpace(authTokens[i])
-        }
+	authToken := s.cfg.AuthToken // replace with your dynamic value as needed
+	if authToken != "" {
+		// 鉴权
+		v1 := e.Group("/:token/v1/", AuthMiddleware(authToken))
+		{
+			v1.POST("/chat/completions", s.completions)
+			v1.POST("/engines/copilot-codex/completions", s.codeCompletions)
 
-        if len(authTokens) > 0 && authTokens[0] != "" {
-            // 鉴权
-            v1 := e.Group("/:token/v1/", AuthMiddleware(authTokens))
-            {
-                v1.POST("/chat/completions", s.completions)
-                v1.POST("/engines/copilot-codex/completions", s.codeCompletions)
+			v1.POST("/v1/chat/completions", s.completions)
+			v1.POST("/v1/engines/copilot-codex/completions", s.codeCompletions)
+		}
+	} else {
+		e.POST("/v1/chat/completions", s.completions)
+		e.POST("/v1/engines/copilot-codex/completions", s.codeCompletions)
 
-                v1.POST("/v1/chat/completions", s.completions)
-                v1.POST("/v1/engines/copilot-codex/completions", s.codeCompletions)
-            }
-        } else {
-            e.POST("/v1/chat/completions", s.completions)
-            e.POST("/v1/engines/copilot-codex/completions", s.codeCompletions)
-
-            e.POST("/v1/v1/chat/completions", s.completions)
-            e.POST("/v1/v1/engines/copilot-codex/completions", s.codeCompletions)
-        }
+		e.POST("/v1/v1/chat/completions", s.completions)
+		e.POST("/v1/v1/engines/copilot-codex/completions", s.codeCompletions)
+	}
 }
 
 type Pong struct {
@@ -422,37 +426,37 @@ func (s *ProxyService) completions(c *gin.Context) {
 }
 
 func (s *ProxyService) codeCompletions(c *gin.Context) {
-	ctx := c.Request.Context()
+    ctx := c.Request.Context()
 
-	time.Sleep(200 * time.Millisecond)
-	if ctx.Err() != nil {
-		abortCodex(c, http.StatusRequestTimeout)
-		return
-	}
+    time.Sleep(200 * time.Millisecond)
+    if ctx.Err() != nil {
+        abortCodex(c, http.StatusRequestTimeout)
+        return
+    }
 
-	body, err := io.ReadAll(c.Request.Body)
-	if nil != err {
-		abortCodex(c, http.StatusBadRequest)
-		return
-	}
+    body, err := io.ReadAll(c.Request.Body)
+    if nil != err {
+        abortCodex(c, http.StatusBadRequest)
+        return
+    }
 
-	body = ConstructRequestBody(body, s.cfg)
+    body = ConstructRequestBody(body, s.cfg)
 
-	proxyUrl := s.cfg.CodexApiBase + "/completions"
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, proxyUrl, io.NopCloser(bytes.NewBuffer(body)))
-	if nil != err {
-		abortCodex(c, http.StatusInternalServerError)
-		return
-	}
+    proxyUrl := s.cfg.CodexApiBase + "/completions"
+    req, err := http.NewRequestWithContext(ctx, http.MethodPost, proxyUrl, io.NopCloser(bytes.NewBuffer(body)))
+    if nil != err {
+        abortCodex(c, http.StatusInternalServerError)
+        return
+    }
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.cfg.CodexApiKey)
-	if "" != s.cfg.CodexApiOrganization {
-		req.Header.Set("OpenAI-Organization", s.cfg.CodexApiOrganization)
-	}
-	if "" != s.cfg.CodexApiProject {
-		req.Header.Set("OpenAI-Project", s.cfg.CodexApiProject)
-	}
+    req.Header.Set("Content-Type", "application/json")
+    req.Header.Set("Authorization", "Bearer "+s.getRandomCodexApiKey())
+    if "" != s.cfg.CodexApiOrganization {
+        req.Header.Set("OpenAI-Organization", s.cfg.CodexApiOrganization)
+    }
+    if "" != s.cfg.CodexApiProject {
+        req.Header.Set("OpenAI-Project", s.cfg.CodexApiProject)
+    }
 
 	resp, err := s.client.Do(req)
 	if nil != err {
@@ -538,23 +542,25 @@ func constructWithChatModel(body []byte, messages interface{}) []byte {
 }
 
 func main() {
-	cfg := readConfig()
+    // 初始化随机数生成器
+    rand.Seed(time.Now().UnixNano())
 
-	gin.SetMode(gin.ReleaseMode)
-	r := gin.Default()
+    cfg := readConfig()
 
-	proxyService, err := NewProxyService(cfg)
-	if nil != err {
-		log.Fatal(err)
-		return
-	}
+    gin.SetMode(gin.ReleaseMode)
+    r := gin.Default()
 
-	proxyService.InitRoutes(r)
+    proxyService, err := NewProxyService(cfg)
+    if nil != err {
+        log.Fatal(err)
+        return
+    }
 
-	err = r.Run(cfg.Bind)
-	if nil != err {
-		log.Fatal(err)
-		return
-	}
+    proxyService.InitRoutes(r)
 
+    err = r.Run(cfg.Bind)
+    if nil != err {
+        log.Fatal(err)
+        return
+    }
 }
