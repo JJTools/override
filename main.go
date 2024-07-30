@@ -442,6 +442,7 @@ func (s *ProxyService) codeCompletions(c *gin.Context) {
 		randomIndex := rand.Intn(len(apiKeys))
 		selectedApiKey := strings.TrimSpace(apiKeys[randomIndex])
 		req.Header.Set("Authorization", "Bearer "+selectedApiKey)
+		log.Println("request completions failed:", string(selectedApiKey))
 	} else {
 		// 如果没有有效的 API key，可以在这里处理错误
 		log.Println("No valid API key found")
