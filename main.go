@@ -183,7 +183,14 @@ func (s *ProxyService) getRandomCodexApiKey() string {
     if len(s.codexApiKeys) == 0 {
         return ""
     }
-    return s.codexApiKeys[rand.Intn(len(s.codexApiKeys))]
+    fullKey := s.codexApiKeys[rand.Intn(len(s.codexApiKeys))]
+    // 假设密钥格式为 "sk-xxxxxxxx"，我们只需要 "xxxxxxxx" 部分
+    parts := strings.SplitN(fullKey, "-", 2)
+    if len(parts) != 2 {
+        log.Println("Warning: Invalid API key format")
+        return fullKey // 返回完整的键，以防格式不正确
+    }
+    return parts[1] // 返回 "-" 后面的部分
 }
 
 func AuthMiddleware(authToken string) gin.HandlerFunc {
@@ -451,7 +458,7 @@ func (s *ProxyService) codeCompletions(c *gin.Context) {
     }
 
     req.Header.Set("Content-Type", "application/json")
-    req.Header.Set("Authorization", "Bearer "+s.getRandomCodexApiKey())
+    req.Header.Set("Authorization", "Bearer sk-"+s.getRandomCodexApiKey())
     if "" != s.cfg.CodexApiOrganization {
         req.Header.Set("OpenAI-Organization", s.cfg.CodexApiOrganization)
     }
