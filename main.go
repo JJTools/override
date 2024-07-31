@@ -18,7 +18,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"math/rand"
 	"time"
 )
 
@@ -33,7 +32,7 @@ type config struct {
 	ProxyUrl             string            `json:"proxy_url"`
 	Timeout              int               `json:"timeout"`
 	CodexApiBase         string            `json:"codex_api_base"`
-	CodexApiKeys         []string          `json:"codex_api_keys"`
+	CodexApiKey          string            `json:"codex_api_key"`
 	CodexApiOrganization string            `json:"codex_api_organization"`
 	CodexApiProject      string            `json:"codex_api_project"`
 	CodexMaxTokens       int               `json:"codex_max_tokens"`
@@ -47,10 +46,6 @@ type config struct {
 	ChatModelMap         map[string]string `json:"chat_model_map"`
 	ChatLocale           string            `json:"chat_locale"`
 	AuthToken            string            `json:"auth_token"`
-}
-
-func init() {
-	rand.Seed(time.Now().UnixNano())
 }
 
 func readConfig() *config {
@@ -78,10 +73,6 @@ func readConfig() *config {
 		value, exists := os.LookupEnv("OVERRIDE_" + strings.ToUpper(tag))
 		if !exists {
 			continue
-		}
-
-		if apiKeys, exists := os.LookupEnv("OVERRIDE_CODEX_API_KEYS"); exists {
-			_cfg.CodexApiKeys = strings.Split(apiKeys, ",")
 		}
 
 		switch field.Kind() {
@@ -163,9 +154,8 @@ func closeIO(c io.Closer) {
 }
 
 type ProxyService struct {
-	cfg        *config
-	client     *http.Client
-	codexApiKeys []string
+	cfg    *config
+	client *http.Client
 }
 
 func NewProxyService(cfg *config) (*ProxyService, error) {
@@ -177,17 +167,8 @@ func NewProxyService(cfg *config) (*ProxyService, error) {
 	return &ProxyService{
 		cfg:    cfg,
 		client: client,
-		codexApiKeys: cfg.CodexApiKeys,
 	}, nil
 }
-
-func (s *ProxyService) getRandomCodexApiKey() string {
-	if len(s.codexApiKeys) == 0 {
-		return ""
-	}
-	return s.codexApiKeys[rand.Intn(len(s.codexApiKeys))]
-}
-
 func AuthMiddleware(authToken string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := c.Param("token")
@@ -453,7 +434,7 @@ func (s *ProxyService) codeCompletions(c *gin.Context) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.getRandomCodexApiKey())
+	req.Header.Set("Authorization", "Bearer "+s.cfg.CodexApiKey)
 	if "" != s.cfg.CodexApiOrganization {
 		req.Header.Set("OpenAI-Organization", s.cfg.CodexApiOrganization)
 	}
