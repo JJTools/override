@@ -32,7 +32,7 @@ type config struct {
 	ProxyUrl             string            `json:"proxy_url"`
 	Timeout              int               `json:"timeout"`
 	CodexApiBase         string            `json:"codex_api_base"`
-	CodexApiKey          string            `json:"codex_api_key"`
+	CodexApiKeys         []string          `json:"codex_api_key"`
 	CodexApiOrganization string            `json:"codex_api_organization"`
 	CodexApiProject      string            `json:"codex_api_project"`
 	CodexMaxTokens       int               `json:"codex_max_tokens"`
@@ -107,6 +107,16 @@ func readConfig() *config {
 	if _cfg.ChatMaxTokens == 0 {
 		_cfg.ChatMaxTokens = 4096
 	}
+	// 处理CodexApiKeys
+	if keyString, exists := os.LookupEnv("OVERRIDE_CODEX_API_KEY"); exists {
+		_cfg.CodexApiKeys = strings.Split(keyString, ",")
+	} else if len(_cfg.CodexApiKeys) == 0 && _cfg.CodexApiKey != "" {
+		// 如果环境变量不存在,但配置文件中有单个密钥,将其转换为切片
+		_cfg.CodexApiKeys = []string{_cfg.CodexApiKey}
+	}
+
+	// 清除旧的单个密钥字段
+	_cfg.CodexApiKey = ""
 
 	return _cfg
 }
@@ -156,6 +166,7 @@ func closeIO(c io.Closer) {
 type ProxyService struct {
 	cfg    *config
 	client *http.Client
+	currentKeyIndex int
 }
 
 func NewProxyService(cfg *config) (*ProxyService, error) {
@@ -167,8 +178,16 @@ func NewProxyService(cfg *config) (*ProxyService, error) {
 	return &ProxyService{
 		cfg:    cfg,
 		client: client,
+		currentKeyIndex: 0,
 	}, nil
 }
+
+func (s *ProxyService) getNextApiKey() string {
+	key := s.cfg.CodexApiKeys[s.currentKeyIndex]
+	s.currentKeyIndex = (s.currentKeyIndex + 1) % len(s.cfg.CodexApiKeys)
+	return key
+}
+
 func AuthMiddleware(authToken string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := c.Param("token")
@@ -439,7 +458,7 @@ func (s *ProxyService) codeCompletions(c *gin.Context) {
 		req.Header.Set("OpenAI-Organization", s.cfg.CodexApiOrganization)
 	}
 	if "" != s.cfg.CodexApiProject {
-		req.Header.Set("OpenAI-Project", s.cfg.CodexApiProject)
+		req.Header.Set("Authorization", "Bearer "+s.getNextApiKey())
 	}
 
 	resp, err := s.client.Do(req)
