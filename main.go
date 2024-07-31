@@ -19,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"math/rand"
 )
 
 const DefaultInstructModel = "gpt-3.5-turbo-instruct"
@@ -32,7 +33,7 @@ type config struct {
 	ProxyUrl             string            `json:"proxy_url"`
 	Timeout              int               `json:"timeout"`
 	CodexApiBase         string            `json:"codex_api_base"`
-	CodexApiKey          string            `json:"codex_api_key"`
+	CodexApiKeys         []string          `json:"codex_api_keys"` // 修改这里
 	CodexApiOrganization string            `json:"codex_api_organization"`
 	CodexApiProject      string            `json:"codex_api_project"`
 	CodexMaxTokens       int               `json:"codex_max_tokens"`
@@ -46,6 +47,11 @@ type config struct {
 	ChatModelMap         map[string]string `json:"chat_model_map"`
 	ChatLocale           string            `json:"chat_locale"`
 	AuthToken            string            `json:"auth_token"`
+}
+
+func getRandomApiKey(keys []string) string {
+	rand.Seed(time.Now().UnixNano())
+	return keys[rand.Intn(len(keys))]
 }
 
 func readConfig() *config {
@@ -93,6 +99,10 @@ func readConfig() *config {
 		case reflect.Float32, reflect.Float64:
 			if floatValue, err := strconv.ParseFloat(value, field.Type().Bits()); err == nil {
 				field.SetFloat(floatValue)
+			}
+		case reflect.Slice:
+			if field.Type().Elem().Kind() == reflect.String {
+				field.Set(reflect.ValueOf(strings.Split(value, ",")))
 			}
 		}
 	}
@@ -434,7 +444,7 @@ func (s *ProxyService) codeCompletions(c *gin.Context) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+s.cfg.CodexApiKey)
+	req.Header.Set("Authorization", "Bearer "+getRandomApiKey(s.cfg.CodexApiKeys)) // 修改这里
 	if "" != s.cfg.CodexApiOrganization {
 		req.Header.Set("OpenAI-Organization", s.cfg.CodexApiOrganization)
 	}
