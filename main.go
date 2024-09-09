@@ -33,7 +33,7 @@ type config struct {
 	ProxyUrl             string            `json:"proxy_url"`
 	Timeout              int               `json:"timeout"`
 	CodexApiBase         string            `json:"codex_api_base"`
-	CodexApiKeys         []string          `json:"codex_api_keys"` // 修改这里
+	CodexApiKeys         []string          `json:"codex_api_keys"`
 	CodexApiOrganization string            `json:"codex_api_organization"`
 	CodexApiProject      string            `json:"codex_api_project"`
 	CodexMaxTokens       int               `json:"codex_max_tokens"`
@@ -234,9 +234,12 @@ func (s *ProxyService) models(c *gin.Context) {
 		"data": []gin.H{
 			{
 				"capabilities": gin.H{
-					"family": "gpt-3.5-turbo",
-					"object": "model_capabilities",
-					"type":   "chat",
+					"family":    "gpt-3.5-turbo",
+					"limits":    gin.H{"max_prompt_tokens": 12288},
+					"object":    "model_capabilities",
+					"supports":  gin.H{"tool_calls": true},
+					"tokenizer": "cl100k_base",
+					"type":      "chat",
 				},
 				"id":      "gpt-3.5-turbo",
 				"name":    "GPT 3.5 Turbo",
@@ -245,20 +248,26 @@ func (s *ProxyService) models(c *gin.Context) {
 			},
 			{
 				"capabilities": gin.H{
-					"family": "gpt-3.5-turbo",
-					"object": "model_capabilities",
-					"type":   "chat",
+					"family":    "gpt-3.5-turbo",
+					"limits":    gin.H{"max_prompt_tokens": 12288},
+					"object":    "model_capabilities",
+					"supports":  gin.H{"tool_calls": true},
+					"tokenizer": "cl100k_base",
+					"type":      "chat",
 				},
 				"id":      "gpt-3.5-turbo-0613",
-				"name":    "GPT 3.5 Turbo (2023-06-13)",
+				"name":    "GPT 3.5 Turbo",
 				"object":  "model",
 				"version": "gpt-3.5-turbo-0613",
 			},
 			{
 				"capabilities": gin.H{
-					"family": "gpt-4",
-					"object": "model_capabilities",
-					"type":   "chat",
+					"family":    "gpt-4",
+					"limits":    gin.H{"max_prompt_tokens": 20000},
+					"object":    "model_capabilities",
+					"supports":  gin.H{"tool_calls": true},
+					"tokenizer": "cl100k_base",
+					"type":      "chat",
 				},
 				"id":      "gpt-4",
 				"name":    "GPT 4",
@@ -267,31 +276,81 @@ func (s *ProxyService) models(c *gin.Context) {
 			},
 			{
 				"capabilities": gin.H{
-					"family": "gpt-4",
-					"object": "model_capabilities",
-					"type":   "chat",
+					"family":    "gpt-4",
+					"limits":    gin.H{"max_prompt_tokens": 20000},
+					"object":    "model_capabilities",
+					"supports":  gin.H{"tool_calls": true},
+					"tokenizer": "cl100k_base",
+					"type":      "chat",
 				},
 				"id":      "gpt-4-0613",
-				"name":    "GPT 4 (2023-06-13)",
+				"name":    "GPT 4",
 				"object":  "model",
 				"version": "gpt-4-0613",
 			},
 			{
 				"capabilities": gin.H{
-					"family": "gpt-4-turbo",
-					"object": "model_capabilities",
-					"type":   "chat",
+					"family":    "gpt-4-turbo",
+					"limits":    gin.H{"max_prompt_tokens": 20000},
+					"object":    "model_capabilities",
+					"supports":  gin.H{"parallel_tool_calls": true, "tool_calls": true},
+					"tokenizer": "cl100k_base",
+					"type":      "chat",
 				},
 				"id":      "gpt-4-0125-preview",
-				"name":    "GPT 4 Turbo (2024-01-25 Preview)",
+				"name":    "GPT 4 Turbo",
 				"object":  "model",
 				"version": "gpt-4-0125-preview",
 			},
 			{
 				"capabilities": gin.H{
-					"family": "text-embedding-ada-002",
-					"object": "model_capabilities",
-					"type":   "embeddings",
+					"family":    "gpt-4o",
+					"limits":    gin.H{"max_prompt_tokens": 20000},
+					"object":    "model_capabilities",
+					"supports":  gin.H{"parallel_tool_calls": true, "tool_calls": true},
+					"tokenizer": "o200k_base",
+					"type":      "chat",
+				},
+				"id":      "gpt-4o",
+				"name":    "GPT 4o",
+				"object":  "model",
+				"version": "gpt-4o-2024-05-13",
+			},
+			{
+				"capabilities": gin.H{
+					"family":    "gpt-4o",
+					"limits":    gin.H{"max_prompt_tokens": 20000},
+					"object":    "model_capabilities",
+					"supports":  gin.H{"parallel_tool_calls": true, "tool_calls": true},
+					"tokenizer": "o200k_base",
+					"type":      "chat",
+				},
+				"id":      "gpt-4o-2024-05-13",
+				"name":    "GPT 4o",
+				"object":  "model",
+				"version": "gpt-4o-2024-05-13",
+			},
+			{
+				"capabilities": gin.H{
+					"family":    "gpt-4o",
+					"limits":    gin.H{"max_prompt_tokens": 20000},
+					"object":    "model_capabilities",
+					"supports":  gin.H{"parallel_tool_calls": true, "tool_calls": true},
+					"tokenizer": "o200k_base",
+					"type":      "chat",
+				},
+				"id":     "gpt-4-o-preview",
+				"name":   "GPT 4o",
+				"object": "model",
+			},
+			{
+				"capabilities": gin.H{
+					"family":    "text-embedding-ada-002",
+					"limits":    gin.H{"max_inputs": 256},
+					"object":    "model_capabilities",
+					"supports":  gin.H{},
+					"tokenizer": "cl100k_base",
+					"type":      "embeddings",
 				},
 				"id":      "text-embedding-ada-002",
 				"name":    "Embedding V2 Ada",
@@ -300,20 +359,12 @@ func (s *ProxyService) models(c *gin.Context) {
 			},
 			{
 				"capabilities": gin.H{
-					"family": "text-embedding-ada-002",
-					"object": "model_capabilities",
-					"type":   "embeddings",
-				},
-				"id":      "text-embedding-ada-002-index",
-				"name":    "Embedding V2 Ada (Index)",
-				"object":  "model",
-				"version": "text-embedding-ada-002",
-			},
-			{
-				"capabilities": gin.H{
-					"family": "text-embedding-3-small",
-					"object": "model_capabilities",
-					"type":   "embeddings",
+					"family":    "text-embedding-3-small",
+					"limits":    gin.H{"max_inputs": 256},
+					"object":    "model_capabilities",
+					"supports":  gin.H{"dimensions": true},
+					"tokenizer": "cl100k_base",
+					"type":      "embeddings",
 				},
 				"id":      "text-embedding-3-small",
 				"name":    "Embedding V3 small",
@@ -322,9 +373,11 @@ func (s *ProxyService) models(c *gin.Context) {
 			},
 			{
 				"capabilities": gin.H{
-					"family": "text-embedding-3-small",
-					"object": "model_capabilities",
-					"type":   "embeddings",
+					"family":    "text-embedding-3-small",
+					"object":    "model_capabilities",
+					"supports":  gin.H{"dimensions": true},
+					"tokenizer": "cl100k_base",
+					"type":      "embeddings",
 				},
 				"id":      "text-embedding-3-small-inference",
 				"name":    "Embedding V3 small (Inference)",
@@ -444,7 +497,7 @@ func (s *ProxyService) codeCompletions(c *gin.Context) {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+getRandomApiKey(s.cfg.CodexApiKeys)) // 修改这里
+	req.Header.Set("Authorization", "Bearer "+ getRandomApiKey(s.cfg.CodexApiKeys))
 	if "" != s.cfg.CodexApiOrganization {
 		req.Header.Set("OpenAI-Organization", s.cfg.CodexApiOrganization)
 	}
