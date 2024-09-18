@@ -29,7 +29,7 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          docker buildx build --push --tag ${{ secrets.DOCKER_HUB_USERNAME }}/github-copilot-proxies:latest --file Dockerfile .
+          docker buildx build --push --tag ${{ secrets.DOCKER_HUB_USERNAME }}/override:latest --file Dockerfile .
 
       - name: Logout from Docker Hub
         run: docker logout
